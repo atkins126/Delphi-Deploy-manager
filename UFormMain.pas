@@ -9,14 +9,13 @@ uses
   Vcl.Grids, JclStrings, System.IOUtils, AdvEdit, AdvEdBtn, AdvFileNameEdit,
   System.ImageList, Vcl.ImgList, Vcl.WinXCtrls, AdvObj, BaseGrid,
   System.Generics.Collections, System.UITypes, AdvSmoothMessageDialog,
-  JvBaseDlg, JvBrowseFolder;
+  JvBaseDlg, JvBrowseFolder, JvSelectDirectory, JvGridFilter;
 
 type
   TFormMain = class(TForm)
     Panel1: TPanel;
     StatusBar1: TStatusBar;
     OpenDialog1: TOpenDialog;
-    FolderDialog1: TFolderDialog;
     BAddFile: TButton;
     BAddFolder: TButton;
     ASPConf: TAdvSmoothTabPager;
@@ -44,6 +43,12 @@ type
     LETargetDir: TComboBox;
     Label1: TLabel;
     OpenDialog2: TOpenDialog;
+    JvSelectDirectory1: TJvSelectDirectory;
+    JvGridFilter1: TJvGridFilter;
+    LEFilter: TLabeledEdit;
+    CBFilterCol: TComboBox;
+    Label3: TLabel;
+    BClearFilter: TButton;
     procedure BAddFileClick(Sender: TObject);
     procedure BAddFolderClick(Sender: TObject);
     procedure FEProjFileKeyDown(Sender: TObject; var Key: Word;
@@ -67,10 +72,15 @@ type
       var CanSelect: Boolean);
     procedure BRefreshClick(Sender: TObject);
     procedure ASPConfChange(Sender: TObject);
+    procedure SBSearchKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure LEFilterChange(Sender: TObject);
+    procedure BClearFilterClick(Sender: TObject);
+    procedure CBFilterColChange(Sender: TObject);
   private
     procedure LoadFiles;
     procedure ShowASMDMessage(Mess: String);
     procedure AddMessButton(Capt: String; ButtRes: integer);
+    procedure ApplyFilter;
     { Private declarations }
   public
     { Public declarations }
@@ -111,12 +121,22 @@ begin
    LETargetDir.Items.Clear;
    LETargetDir.Items.Add('.\');
    LETargetDir.Items.Add('.\res\xml');
+   LETargetDir.Items.Add('.\assets');
+   LETargetDir.Items.Add('.\res\raw');
 
    if ASPConf.ActivePage = ASPPAndroid32
    then
-      LETargetDir.Items.Add('library\lib\armeabi-v7a')
+      begin
+         JvGridFilter1.Grid := SGAndroid32;
+         LETargetDir.Items.Add('library\lib\armeabi-v7a');
+      end
    else
-      LETargetDir.Items.Add('library\lib\arm64-v8a');
+      begin
+         JvGridFilter1.Grid := SGAndroid64;
+         LETargetDir.Items.Add('library\lib\arm64-v8a');
+      end;
+
+   ApplyFilter;
 
 end;
 
@@ -191,6 +211,9 @@ begin
 
       end;
 
+   LEFilter.Text := '';
+   JvGridFilter1.ShowRows;
+
 end;
 
 procedure TFormMain.BAddFolderClick(Sender: TObject);
@@ -201,15 +224,15 @@ var
 
 begin
 
-   if FolderDialog1.Execute
+   if JvSelectDirectory1.Execute
    then
       begin
 
-         if Pos(ExtractFilePath(FEProjFile.Text), FolderDialog1.Directory) > 0
+         if Pos(ExtractFilePath(FEProjFile.Text), JvSelectDirectory1.Directory) > 0
          then
-            Path := StrAfter(ExtractFilePath(FEProjFile.Text), FolderDialog1.Directory)
+            Path := StrAfter(ExtractFilePath(FEProjFile.Text), JvSelectDirectory1.Directory)
          else
-            Path := FolderDialog1.Directory;
+            Path := JvSelectDirectory1.Directory;
 
          if ASPConf.ActivePage = ASPPAndroid32
          then
@@ -261,6 +284,15 @@ begin
 
       end;
 
+   LEFilter.Text := '';
+   JvGridFilter1.ShowRows;
+
+end;
+
+procedure TFormMain.BClearFilterClick(Sender: TObject);
+begin
+   LEFilter.Text := '';
+   JvGridFilter1.ShowRows;
 end;
 
 procedure TFormMain.BDelSelClick(Sender: TObject);
@@ -288,7 +320,8 @@ begin
 
          for i := 1 to SGAndroid32.RowCount - 1 do
             if (i < SGAndroid32.Selection.Top) or
-               (i > SGAndroid32.Selection.Bottom)
+               (i > SGAndroid32.Selection.Bottom) or
+               (SGAndroid32.RowHeights[i] = 0)
             then
                begin
 
@@ -301,12 +334,16 @@ begin
 
                end;
 
-         SGAndroid32.RowCount := 1;
+         SGAndroid32.RowCount := 2;
+         SGAndroid32.Rows[1].Clear;
 
          for i := 0 to High(GRows) do
             begin
 
-               SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+               if SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] <> ''
+               then
+                  SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+
                SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] := GRows[i].Source;
                SGAndroid32.Cells[1, SGAndroid32.RowCount - 1] := GRows[i].Target;
                SGAndroid32.Cells[3, SGAndroid32.RowCount - 1] := GRows[i].Conf;
@@ -323,7 +360,8 @@ begin
 
          for i := 1 to SGAndroid64.RowCount - 1 do
             if (i < SGAndroid64.Selection.Top) or
-               (i > SGAndroid64.Selection.Bottom)
+               (i > SGAndroid64.Selection.Bottom) or
+               (SGAndroid64.RowHeights[i] = 0)
             then
                begin
 
@@ -336,12 +374,16 @@ begin
 
                end;
 
-         SGAndroid64.RowCount := 1;
+         SGAndroid64.RowCount := 2;
+         SGAndroid64.Rows[1].Clear;
 
          for i := 0 to High(GRows) do
             begin
 
-               SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+               if SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] <> ''
+               then
+                  SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+
                SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] := GRows[i].Source;
                SGAndroid64.Cells[1, SGAndroid64.RowCount - 1] := GRows[i].Target;
                SGAndroid64.Cells[3, SGAndroid64.RowCount - 1] := GRows[i].Conf;
@@ -351,6 +393,9 @@ begin
             end;
 
       end;
+
+   LEFilter.Text := '';
+   JvGridFilter1.ShowRows;
 
 end;
 
@@ -460,6 +505,22 @@ begin
 
 end;
 
+procedure TFormMain.ApplyFilter;
+begin
+
+   if LEFilter.Text <> ''
+   then
+      JvGridFilter1.Filter('[' + CBFilterCol.Text + '] like "' + LEFilter.Text + '"')
+   else
+      JvGridFilter1.ShowRows;
+
+end;
+
+procedure TFormMain.CBFilterColChange(Sender: TObject);
+begin
+   ApplyFilter;
+end;
+
 procedure TFormMain.CBIncludeClick(Sender: TObject);
 
 var
@@ -516,6 +577,11 @@ begin
 
 end;
 
+procedure TFormMain.LEFilterChange(Sender: TObject);
+begin
+   ApplyFilter;
+end;
+
 procedure TFormMain.LoadFiles;
 
 var
@@ -534,8 +600,8 @@ begin
       then
          begin
 
-            SGAndroid32.RowCount := 1;
-            SGAndroid64.RowCount := 1;
+            SGAndroid32.RowCount := 2;
+            SGAndroid64.RowCount := 2;
 
             AssignFile(ProjFile, FEProjFile.Text);
 
@@ -551,6 +617,53 @@ begin
                   then
                      begin
 
+                        FileName := StrBefore('">', StrAfter('<JavaReference Include="', Line));
+
+                        Readln(ProjFile, Line);
+
+                        if Pos('ClassesdexFile64', Line) > 0
+                        then
+                           begin
+
+                              if SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] <> ''
+                              then
+                                 SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+
+                              SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] := FileName;
+                              SGAndroid64.Cells[3, SGAndroid64.RowCount - 1] := 'NA';
+
+                              SGAndroid64.Cells[1, SGAndroid64.RowCount - 1] := 'NA';
+
+                              SGAndroid64.Cells[4, SGAndroid64.RowCount - 1] := 'NA';
+
+                              SGAndroid64.Cells[2, SGAndroid64.RowCount - 1] := 'NA';
+
+                           end
+                        else
+                           begin
+
+                              if SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] <> ''
+                              then
+                                 SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+
+                              SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] := FileName;
+                              SGAndroid32.Cells[3, SGAndroid32.RowCount - 1] := 'NA';
+
+                              SGAndroid32.Cells[1, SGAndroid32.RowCount - 1] := 'NA';
+
+                              SGAndroid32.Cells[4, SGAndroid32.RowCount - 1] := 'NA';
+
+                              SGAndroid32.Cells[2, SGAndroid32.RowCount - 1] := 'NA';
+
+                           end
+
+                     end;
+
+                  if (Pos('<DeployFile', Line) > 0) and
+                     (Pos('Class="File"', Line) > 0)
+                  then
+                     begin
+
                         FileName := StrBefore('" Configuration=', StrAfter('LocalName="', Line));
                         Config :=   StrBefore('" Class=', StrAfter('Configuration="', Line));
                         Readln(ProjFile, Line);
@@ -559,11 +672,17 @@ begin
                         then
                            begin
 
-                              SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+                              if SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] <> ''
+                              then
+                                 SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+
                               SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] := FileName;
                               SGAndroid32.Cells[3, SGAndroid32.RowCount - 1] := Config;
 
-                              SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+                              if SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] <> ''
+                              then
+                                 SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+
                               SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] := FileName;
                               SGAndroid64.Cells[3, SGAndroid64.RowCount - 1] := Config;
 
@@ -584,7 +703,10 @@ begin
                            then
                               begin
 
-                                 SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+                                 if SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] <> ''
+                                 then
+                                    SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+
                                  SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] := FileName;
                                  SGAndroid64.Cells[3, SGAndroid64.RowCount - 1] := Config;
 
@@ -602,7 +724,10 @@ begin
                               then
                                  begin
 
-                                    SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+                                    if SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] <> ''
+                                    then
+                                       SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+
                                     SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] := FileName;
                                     SGAndroid32.Cells[3, SGAndroid32.RowCount - 1] := Config;
 
@@ -670,6 +795,16 @@ begin
                end;
 
       end;
+
+end;
+
+procedure TFormMain.SBSearchKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+
+   if Key = VK_RETURN
+   then
+      SBSearchInvokeSearch(Sender);
 
 end;
 
@@ -828,7 +963,16 @@ begin
    LETargetDir.Items.Clear;
    LETargetDir.Items.Add('.\');
    LETargetDir.Items.Add('.\res\xml');
+   LETargetDir.Items.Add('.\assets');
+   LETargetDir.Items.Add('.\res\raw');
    LETargetDir.Items.Add('library\lib\armeabi-v7a');
+
+   CBFilterCol.Items.Add('Source Path');
+   CBFilterCol.Items.Add('Target Directory');
+   CBFilterCol.Items.Add('SubDirs');
+   CBFilterCol.Items.Add('Configurations');
+   CBFilterCol.Items.Add('Remote Name');
+   CBFilterCol.ItemIndex := 0;
 
 end;
 
@@ -1379,7 +1523,8 @@ begin
 
          for i := 1 to SGAndroid32.RowCount - 1 do
             if (i >= SGAndroid32.Selection.Top) and
-               (i <= SGAndroid32.Selection.Bottom)
+               (i <= SGAndroid32.Selection.Bottom) and
+               (SGAndroid32.RowHeights[i] <> 0)
             then
                begin
 
@@ -1472,16 +1617,22 @@ begin
 
                end;
 
-         SGAndroid64.RowCount := 1;
+         SGAndroid64.RowCount := 2;
+         SGAndroid64.Rows[1].Clear;
 
          for x := 0 to GRows.Count - 1 do
             begin
-               SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+
+               if SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] <> ''
+               then
+                  SGAndroid64.RowCount := SGAndroid64.RowCount + 1;
+
                SGAndroid64.Cells[0, SGAndroid64.RowCount - 1] := GRows[x].Source;
                SGAndroid64.Cells[1, SGAndroid64.RowCount - 1] := GRows[x].Target;
                SGAndroid64.Cells[3, SGAndroid64.RowCount - 1] := GRows[x].Conf;
                SGAndroid64.Cells[2, SGAndroid64.RowCount - 1] := GRows[x].Subd;
                SGAndroid64.Cells[4, SGAndroid64.RowCount - 1] := GRows[x].RemName;
+
             end;
 
          GRows.DisposeOf;
@@ -1507,7 +1658,8 @@ begin
 
          for i := 1 to SGAndroid64.RowCount - 1 do
             if (i >= SGAndroid64.Selection.Top) and
-               (i <= SGAndroid64.Selection.Bottom)
+               (i <= SGAndroid64.Selection.Bottom) and
+               (SGAndroid64.RowHeights[i] <> 0)
             then
                begin
 
@@ -1600,16 +1752,22 @@ begin
 
                end;
 
-         SGAndroid32.RowCount := 1;
+         SGAndroid32.RowCount := 2;
+         SGAndroid32.Rows[1].Clear;
 
          for x := 0 to GRows.Count - 1 do
             begin
-               SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+
+               if SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] <> ''
+               then
+                  SGAndroid32.RowCount := SGAndroid32.RowCount + 1;
+
                SGAndroid32.Cells[0, SGAndroid32.RowCount - 1] := GRows[x].Source;
                SGAndroid32.Cells[1, SGAndroid32.RowCount - 1] := GRows[x].Target;
                SGAndroid32.Cells[3, SGAndroid32.RowCount - 1] := GRows[x].Conf;
                SGAndroid32.Cells[2, SGAndroid32.RowCount - 1] := GRows[x].Subd;
                SGAndroid32.Cells[4, SGAndroid32.RowCount - 1] := GRows[x].RemName;
+
             end;
 
          GRows.DisposeOf;
